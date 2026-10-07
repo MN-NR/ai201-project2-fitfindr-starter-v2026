@@ -10,14 +10,8 @@ can't tell which layer is lying to you.
     suggest_outfit(new_item, wardrobe)             → str
     create_fit_card(outfit, new_item)              → str
 
-All three are stubs right now. They run and they do nothing — that's the
-starting position and it's deliberate.
-
-⚠️ Before you write any of them, fill in the **Tool Inventory** section of your
-README (Milestone 2). Four lines per tool: what it does, each input with its
-type, exactly what it returns, and what it returns when it has nothing to give.
-That last line is what your loop branches on. "Returns a list" earns nothing —
-the description has to say what is *in* the list.
+The implementations follow the inputs, return shapes, and empty cases in the
+README Tool Inventory.
 """
 
 import re
@@ -69,13 +63,9 @@ def search_listings(
     realistic — thrift listings often have no brand. If something you write
     assumes a brand is always there, you will find out in unit 4.
 
-    TODO:
-        1. Load every listing with load_listings().
-        2. Filter by max_price and by size, when each is provided.
-        3. Score what's left by keyword overlap with `description`.
-        4. Drop anything scoring zero.
-        5. Sort by score, highest first, and return the listing dicts —
-           at most config.SEARCH_RESULT_LIMIT of them.
+    Listings are filtered first, then scored by overlap with title, tags,
+    category, colors, and description. Description-only mentions do not make
+    an unrelated item a match.
 
     Test it from a terminal before you move on:
         python -c "from tools import search_listings; print(search_listings('graphic tee', max_price=30))"
@@ -141,12 +131,8 @@ def suggest_outfit(new_item: dict, wardrobe: dict) -> str:
         raising or returning "". Unit 4 has you trigger the empty wardrobe on
         purpose, so decide now what it should do.
 
-    TODO:
-        1. Check whether wardrobe['items'] is empty.
-        2. If it is, ask the model for general styling ideas for this item.
-        3. If it isn't, format the wardrobe items into the prompt and ask for
-           specific combinations naming pieces the user already owns.
-        4. Return the model's response.
+    An empty wardrobe prompts for general ideas; a populated wardrobe prompts
+    for named combinations with owned pieces.
 
     Test it from a terminal before you move on:
         python -c "from tools import suggest_outfit; from utils.data_loader import get_example_wardrobe, load_listings; print(suggest_outfit(load_listings()[0], get_example_wardrobe()))"
@@ -210,10 +196,8 @@ def create_fit_card(outfit: str, new_item: dict) -> str:
         • CACHE_ENABLED — the adapter handed back an answer it already had
         • TEMPERATURE   — at 0.0 the model gives the same words every time
 
-    TODO:
-        1. Guard against an empty or whitespace-only `outfit`.
-        2. Build a prompt with the item details and the outfit.
-        3. Call generate() and return the response.
+    Empty outfit input gets a helpful message. Otherwise the prompt carries
+    the item, price, platform, and outfit details into the caption.
 
     Test it from a terminal before you move on:
         python -c "from tools import create_fit_card; from utils.data_loader import load_listings; print(create_fit_card('jeans and white sneakers', load_listings()[0]))"

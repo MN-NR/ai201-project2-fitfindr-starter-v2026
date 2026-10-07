@@ -13,29 +13,13 @@
 > python app.py ask 'vintage graphic tee under $30'
 > ```
 >
-> All three tools are stubs, so that last command will do nothing useful yet.
-> That's the starting position.
+> The three tools are implemented. The last command searches listings, suggests
+> an outfit, and creates a fit card.
 >
-> **The rest of this file is your submission.** Fill it in as you go.
+> **The Unit 3 sections below are the submission.** Unit 4 sections remain as
+> the starter template for the next assignment.
 
 ---
-
-<!-- ─────────────────────────────────────────────────────────────────────────
-     HOW TO USE THIS FILE
-
-     This is your submission. Fill each section in as you finish the milestone
-     it belongs to — don't leave it all to the end.
-
-     Unit 3 asks for the first five sections. Unit 4 adds the five below them.
-     Leave the unit 4 sections alone until then; they're here so you know
-     what's coming.
-
-     Everything is pasted as TEXT. No screenshots, no images, no video links.
-     A typed block of output gets full credit; a picture of the same output
-     gets none.
-     ───────────────────────────────────────────────────────────────────────── -->
-
-<!-- ═══════════════════════ UNIT 3 — THE BUILD ═══════════════════════ -->
 
 ## What This Does
 
@@ -44,16 +28,6 @@ FitFindr takes a request for a thrift item, such as a vintage graphic tee under 
 ---
 
 ## Tool Inventory
-
-<!-- Four lines per tool. This is worth 2 points and it's the single most
-     common place students lose them.
-
-     "Returns a list" earns NOTHING. The description has to say what is IN
-     the list.
-
-     The empty case isn't optional either — it's the thing your loop branches
-     on, and if you don't decide it here you'll discover it as a crash in
-     Milestone 5. -->
 
 ### `search_listings`
 
@@ -80,17 +54,6 @@ FitFindr takes a request for a thrift item, such as a vintage graphic tee under 
 
 ## Planning Loop
 
-<!-- Your branch rule, stated as a rule — the condition AND both paths — plus
-     the file and function that holds it.
-
-     Like this:
-       "If search_listings returns an empty list, put a message in the session
-        and stop. Otherwise take the first result and go to suggest_outfit."
-        — agent.py::run_agent
-
-     The grader checks your code against what you claim here, so the file and
-     function have to be real. -->
-
 **Branch rule:** If `search_listings` returns `[]`, save a message telling the user to broaden the description, change the size, or raise the price limit, then stop. Otherwise save the first result as `selected_item` and proceed to `suggest_outfit` and `create_fit_card`.
 
 **Where it lives:** `agent.py::run_agent`
@@ -103,57 +66,66 @@ FitFindr takes a request for a thrift item, such as a vintage graphic tee under 
 
 ## Sample Run
 
-<!-- Two things go here.
-
-     1. One FULL query and its output, pasted as text.
-     2. Your three per-tool terminal tests — the command and what it printed. -->
-
 **One full query**
 
-```
-$ python app.py ask '...'
+```text
+$ .venv/bin/python app.py ask 'vintage graphic tee under $30'
 
+  Found:    Graphic Tee — 2003 Tour Bootleg Style — $24.0 on depop
+
+  Outfit:   Pair your new graphic tee with the baggy straight-leg jeans, black combat boots, and black crossbody bag for an effortless grunge look. Alternatively, layer the vintage black denim jacket over the tee and style it with the wide-leg khaki trousers and chunky white sneakers.
+
+  Fit card: Found this insane 2003 tour bootleg style graphic tee on Depop for just $24. It looks so good with baggy straight-leg jeans. Totally obsessed with how worn-in it is!
+
+1 model calls this session, 1 served from cache, 147 prompt + 44 output tokens
 ```
 
 **The three tools, tested one at a time**
 
-```
-$ python -c "from tools import search_listings; print(search_listings('graphic tee', max_price=30))"
-
-```
-
-```
-$ python -c "from tools import suggest_outfit; ..."
-
+```text
+$ .venv/bin/python -c "from tools import search_listings; print([(x['id'], x['title'], x['size'], x['price']) for x in search_listings('graphic tee', max_price=30)])"
+[('lst_006', 'Graphic Tee — 2003 Tour Bootleg Style', 'L', 24.0), ('lst_002', 'Y2K Baby Tee — Butterfly Print', 'S/M', 18.0), ('lst_033', 'Vintage Band Tee — Faded Grey', 'L', 19.0), ('lst_015', 'Vintage Graphic Hoodie — Faded Black', 'L', 26.0)]
 ```
 
+```text
+$ .venv/bin/python -c "from tools import suggest_outfit; from utils.data_loader import get_example_wardrobe, load_listings; print(suggest_outfit(load_listings()[5], get_example_wardrobe()))"
+Pair your new graphic tee with the baggy straight-leg jeans, black combat boots, and black crossbody bag for an effortless grunge look. Alternatively, layer the vintage black denim jacket over the tee and style it with the wide-leg khaki trousers and chunky white sneakers.
 ```
-$ python -c "from tools import create_fit_card; ..."
 
+```text
+$ .venv/bin/python -c "from tools import create_fit_card; from utils.data_loader import load_listings; print(create_fit_card('Baggy straight-leg jeans and black combat boots', load_listings()[5]))"
+Found this sick 2003 tour bootleg style graphic tee on depop for just $24. It looks so good with my black combat boots. I love scoring pieces that look this worn-in and authentic.
 ```
+
+**Empty-search branch**
+
+```text
+$ .venv/bin/python app.py ask 'designer ballgown size XXS under $5'
+  No listings matched that request. Try a broader item description, another size, or a higher price limit.
+0 model calls this session
+```
+
+For the state check, I replaced the outfit tool temporarily with a spy and ran the matching query. `selected_item.id`, the saved `tool_inputs.suggest_outfit.new_item_id`, and the ID actually received by the spy were all `lst_006`. Repeating the impossible query with a spy that would raise if called returned `fit_card: None`; the outfit tool was never reached.
+
+With caching disabled, three calls to `create_fit_card` for the same listing produced different wording. Each mentioned the graphic tee, $24, and Depop. The normal sample above used one cached outfit answer while the fit card was a fresh model call.
+
+I also checked the tool empty cases directly: `search_listings('designer ballgown', size='XXS', max_price=5)` returned `[]`; `suggest_outfit({}, get_empty_wardrobe())` returned `Choose a listing before asking for outfit ideas.`; and `create_fit_card(' ', load_listings()[5])` returned `Add an outfit suggestion before creating a fit card.` A separate empty-wardrobe call with a real listing returned general styling ideas without claiming the user owned specific pieces.
 
 ---
 
 ## How I Used AI
 
-<!-- Two specific moments. What you asked, what came back, what you changed.
-
-     "I used Claude to help me code" is not enough.
-
-     "I gave Claude my search_listings spec. It returned None on no match
-     instead of an empty list, so I changed it" is the level we want. -->
-
 **Moment 1**
 
-- *What I asked for:*
-- *What came back:*
-- *What I changed:*
+- *What I asked for:* I asked Codex to inspect the listing data and build the three specified tools.
+- *What came back:* It found clothing sizes such as `S/M`, numeric shoe sizes such as `US 8`, and waist sizes such as `W30 L30`. A plain substring size check would have confused these formats.
+- *What I changed:* The search uses size tokens for clothing and exact matches for numeric shoe sizes. I checked that a request for size S finds the `S/M` tee without returning a shoe or XL top.
 
 **Moment 2**
 
-- *What I asked for:*
-- *What came back:*
-- *What I changed:*
+- *What I asked for:* I asked Codex to run both the matching and impossible queries and inspect the session transfer.
+- *What came back:* The first parser check left `size XXS` inside the description instead of recording it as a size. The impossible search still stopped, but the parsed state was wrong.
+- *What I changed:* I added `XXS` to the size parser and reran the check. The session now records `size: XXS`, returns no listings, and stops before the outfit tool. A spy also confirmed the selected `lst_006` reached `suggest_outfit` on the matching path.
 
 <!-- ═══════════════════════ UNIT 4 — THE TEST ═══════════════════════
 
