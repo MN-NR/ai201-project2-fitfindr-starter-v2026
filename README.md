@@ -39,9 +39,7 @@
 
 ## What This Does
 
-<!-- Three or four sentences: what a user asks for, and what they get back. -->
-
-
+FitFindr takes a request for a thrift item, such as a vintage graphic tee under $30 in size M. It searches 40 mock listings, chooses the best match, suggests an outfit using the user's saved wardrobe, and writes a short fit-card caption. When there is no match, it stops and tells the user which search constraints to change.
 
 ---
 
@@ -59,24 +57,24 @@
 
 ### `search_listings`
 
-- **What it does:**
-- **Inputs:** <!-- name and type each: `max_price` (float), not "a price" -->
-- **Returns:**
-- **When it has nothing:**
+- **What it does:** Filters the local listings and ranks remaining items by overlap with the request.
+- **Inputs:** `description` (`str`, required search words), `size` (`str | None`, optional case-insensitive clothing or exact numeric size), `max_price` (`float | None`, inclusive ceiling).
+- **Returns:** `list[dict]`, at most `config.SEARCH_RESULT_LIMIT` listing records in score order. Each record has `id`, `title`, `description`, `category`, `style_tags`, `size`, `condition`, `price`, `colors`, `brand`, and `platform`.
+- **When it has nothing:** Returns `[]`, including when filters eliminate every match.
 
 ### `suggest_outfit`
 
-- **What it does:**
-- **Inputs:**
-- **Returns:**
-- **When it has nothing:**
+- **What it does:** Uses the model to suggest one or two ways to style the selected listing.
+- **Inputs:** `new_item` (`dict`, one complete listing record), `wardrobe` (`dict` with an `items: list[dict]` field; each item has a name, category, colors, and style tags).
+- **Returns:** `str`, a non-empty outfit suggestion using named owned items when available.
+- **When it has nothing:** If `wardrobe["items"]` is empty, returns general styling advice for the listing. If `new_item` is empty, returns a descriptive message rather than calling the model.
 
 ### `create_fit_card`
 
-- **What it does:**
-- **Inputs:**
-- **Returns:**
-- **When it has nothing:**
+- **What it does:** Uses the model to write a short, post-ready caption for the selected listing and suggested outfit.
+- **Inputs:** `outfit` (`str`, the prior tool's suggestion), `new_item` (`dict`, the same listing record selected after search).
+- **Returns:** `str`, a two-to-four-sentence caption naming the item, its price, its platform, and a concrete outfit detail.
+- **When it has nothing:** If `outfit` is empty or whitespace, returns an actionable message instead of calling the model.
 
 ---
 
@@ -93,13 +91,13 @@
      The grader checks your code against what you claim here, so the file and
      function have to be real. -->
 
-**Branch rule:**
+**Branch rule:** If `search_listings` returns `[]`, save a message telling the user to broaden the description, change the size, or raise the price limit, then stop. Otherwise save the first result as `selected_item` and proceed to `suggest_outfit` and `create_fit_card`.
 
 **Where it lives:** `agent.py::run_agent`
 
-**How the query is parsed:** <!-- regex, string splitting, or asking the model — say which -->
+**How the query is parsed:** Regular expressions extract a price ceiling and size phrase; the remaining words become the description. No model call is needed for parsing.
 
-**What moves through the session:** <!-- which fields, in what order -->
+**What moves through the session:** `parsed` feeds `search_results`; the first result becomes `selected_item`; that item and `wardrobe` feed `outfit_suggestion`; the suggestion and same item feed `fit_card`. `tool_inputs` records the item ID passed into the outfit tool so the transfer can be checked.
 
 ---
 
