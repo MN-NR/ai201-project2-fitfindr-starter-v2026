@@ -25,9 +25,7 @@ Given a query that matches at least one listing, the agent completes all three
 tool calls and returns a fit card — in at least 4 of 5 tries.
 
 **Why this target:**
-<!-- Why 4 of 5 and not 5 of 5? Something about your search, probably —
-     "my search is a plain keyword match and some phrasings will miss" is a
-     real answer. -->
+The search uses local keyword overlap rather than understanding every synonym, so one reasonable phrasing may find no listing. Four of five still requires the agent to complete the full path on most queries the dataset can satisfy.
 
 ---
 
@@ -37,66 +35,34 @@ Given a query that matches no listings, the agent stops before calling
 `suggest_outfit` and returns a message naming what to change — 5 of 5 tries.
 
 **Why this target:**
-<!-- Why is 5 of 5 reasonable here when criterion 1 isn't? What's different
-     about this path? -->
+An empty Python list is deterministic and the loop can inspect it before any model call. Every impossible query should therefore stop safely and tell the user how to broaden the search.
 
 ---
 
-## 3. Something about state
+## 3. The selected listing reaches the outfit tool unchanged
 
-<!-- YOU WRITE THIS ONE.
-
-     How would you know that the item your search found is the same item the
-     next tool received? Name something countable or observable.
-
-     This is the criterion people find hardest, because state failure doesn't
-     look like state failure — it looks like a tool problem. Something that
-     compares session["selected_item"] against what actually reached
-     suggest_outfit is the shape you're after. -->
-
-
+For five matching queries, `session["selected_item"]["id"]` equals the `new_item["id"]` actually passed to `suggest_outfit` in 5 of 5 tries.
 
 **Why this target:**
-
-
+The listing ID is stable and unique in the data, so there is no ambiguity about whether the tool received the selected item. State transfer is local code, so all five transfers should agree.
 
 ---
 
-## 4. Something about the fit card
+## 4. Fit cards include the facts a shopper needs
 
-<!-- YOU WRITE THIS ONE.
-
-     The fit card calls a model, so the same input can produce different words
-     each time. That's not a bug — it's the nature of the tool. So what would
-     make it acceptable?
-
-     Think about what you'd actually be unhappy to see. A caption that never
-     mentions the price? Two different items producing the same opening
-     sentence? A card longer than a caption anyone would post? Any of those can
-     be turned into a number. -->
-
-
+For five matching queries, at least 4 of 5 fit cards are two to four sentences and mention the selected item's title or clear item type, its numeric price, and its platform.
 
 **Why this target:**
-
-
+The caption's wording can vary, but it should still tell a reader what the find is, what it costs, and where to find it. I allowed one miss because generation can vary even with a specific prompt.
 
 ---
 
-## 5. Your choice
+## 5. Search respects the price ceiling
 
-<!-- YOU WRITE THIS ONE TOO.
-
-     Pick something you actually care about getting right. Speed, the empty
-     wardrobe path, what happens when the model can't be reached, whether the
-     search respects a price ceiling — anything, as long as it names a number
-     or an observable outcome. -->
-
-
+For five queries with a stated maximum price, every item in `session["search_results"]` has `price <= session["parsed"]["max_price"]`, in 5 of 5 tries.
 
 **Why this target:**
-
-
+Price is a numeric field in every listing, so this filter should be exact. A single above-budget result would make the agent disregard an explicit shopper constraint.
 
 ---
 
