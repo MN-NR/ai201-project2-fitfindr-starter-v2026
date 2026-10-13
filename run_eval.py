@@ -190,7 +190,13 @@ def write_report(rows, args):
                 f"- stopped early: {'yes — ' + str(session.get('error')) if session.get('error') else 'no'}",
                 f"- selected_item: {item.get('title', '(none)')}"
                 + (f" (${item.get('price')}, {item.get('platform')})" if item else ""),
+                f"- selected_item_id: {item.get('id', '(none)')}",
+                "- outfit_tool_item_id: "
+                + str(session.get('tool_inputs', {}).get('suggest_outfit', {}).get('new_item_id', '(not called)')),
+                f"- parsed: {session.get('parsed')}",
                 f"- search_results: {len(session.get('search_results') or [])}",
+                "- search_result_prices: "
+                + str([result.get('price') for result in session.get('search_results') or []]),
                 "",
             ]
             if session.get("outfit_suggestion"):
