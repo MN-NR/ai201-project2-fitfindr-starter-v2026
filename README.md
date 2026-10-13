@@ -127,6 +127,8 @@ I also checked the tool empty cases directly: `search_listings('designer ballgow
 - *What came back:* The first parser check left `size XXS` inside the description instead of recording it as a size. The impossible search still stopped, but the parsed state was wrong.
 - *What I changed:* I added `XXS` to the size parser and reran the check. The session now records `size: XXS`, returns no listings, and stops before the outfit tool. A spy also confirmed the selected `lst_006` reached `suggest_outfit` on the matching path.
 
+**Unit 4:** I asked Codex to register the search tool through MCP and compare its returned value with the direct call; both returned a Python list of listing dictionaries, including `[]` for no match. I also asked it to trigger the three required failures and inspect the messages. It used an invalid key only for one process, saw the model error handled in the outfit stage, and added trace steps that show the MCP call and early stop.
+
 <!-- ═══════════════════════ UNIT 4 — THE TEST ═══════════════════════
 
      Don't fill these in during unit 3.
@@ -147,17 +149,52 @@ I also checked the tool empty cases directly: `search_listings('designer ballgow
 
 | Criterion | Target | Try 1 | Try 2 | Try 3 | Try 4 | Try 5 | Verdict |
 |---|---|---|---|---|---|---|---|
-| 1.  |  |  |  |  |  |  |  |
-| 2.  |  |  |  |  |  |  |  |
-| 3.  |  |  |  |  |  |  |  |
-| 4.  |  |  |  |  |  |  |  |
-| 5.  |  |  |  |  |  |  |  |
+| 1. Matching query completes all three tools | 4/5 | PASS | PASS | PASS | PASS | PASS | MET (5/5) |
+| 2. Empty search stops before tool 2 | 5/5 | PASS | PASS | PASS | PASS | PASS | MET (5/5) |
+| 3. Selected item reaches outfit tool unchanged | 5/5 | PASS | PASS | PASS | PASS | PASS | MET (5/5) |
+| 4. Fit card includes item, price, platform in 2–4 sentences | 4/5 | PASS | PASS | PASS | PASS | PASS | MET (5/5) |
+| 5. Every search result stays within price ceiling | 5/5 | PASS | PASS | PASS | PASS | PASS | MET (5/5) |
 
-**Real output from one try**, pasted as text, naming the file and function
-that produced it:
+Raw evidence: [results/run_2026-10-13_1816_before.md](results/run_2026-10-13_1816_before.md), produced by `run_eval.py::main` with caching off. It contains all 25 tries, full model text, session fields, and traces. The excerpts below are actual output from try 1 of each scenario (criterion 4 also quotes try 2).
 
+**1. Full run:** `agent.py::run_agent` called the MCP tool, `tools.py::suggest_outfit`, and `tools.py::create_fit_card` in that order. `run_eval.py::write_report` recorded the resulting card:
+
+```text
+- selected_item_id: lst_006
+Just scored this 2003 tour bootleg graphic tee on Depop for $24! It looks so good paired with baggy straight-leg jeans for an effortless grunge vibe. Can’t wait to wear it all the time.
 ```
 
+**2. Empty search:** `agent.py::run_agent` stopped after `mcp_server.py::search_listings` returned `[]`; its trace contains no outfit call:
+
+```text
+[1] search_listings (via MCP)
+      in:  description='designer ballgown', size='XXS', max_price=5.0
+      out: [] (empty)
+[2] stop
+      out: No listings matched that request. Try a broader item description, another size, or a higher price limit.
+      →    search returned an empty list
+```
+
+**3. State transfer:** `agent.py::run_agent` recorded the selected ID and the ID passed to `tools.py::suggest_outfit`:
+
+```text
+- selected_item_id: lst_004
+- outfit_tool_item_id: lst_004
+[2] suggest_outfit
+      in:  new_item=lst_004 90s Track Jacket — Navy/White Stripe; wardrobe_items=10
+```
+
+**4. Fit card facts:** `tools.py::create_fit_card` returned this two-sentence card for the selected `90s Silk Slip Dress — Floral, Midi Length`, price $30 on Depop (try 2):
+
+```text
+Still can't believe I scored this 90s silk slip dress on Depop for just $30! Throwing my oversized grey crewneck sweatshirt right over it for the easiest outfit ever.
+```
+
+**5. Price ceiling:** `agent.py::_parse_query` found 50.0; `mcp_server.py::search_listings` returned six listings, all at or below it, as recorded by `run_eval.py::write_report`:
+
+```text
+- parsed: {'description': 'denim jacket', 'size': None, 'max_price': 50.0}
+- search_result_prices: [42.0, 24.0, 27.0, 45.0, 30.0, 38.0]
 ```
 
 ---
@@ -182,14 +219,17 @@ that produced it:
 
 | # | Criterion | Target | Verdict | How I decided |
 |---|---|---|---|---|
-| 1 |  |  |  |  |
-| 2 |  |  |  |  |
-| 3 |  |  |  |  |
-| 4 |  |  |  |  |
-| 5 |  |  |  |  |
+| 1 | Full three-tool run | 4/5 | MET | All five matching tries completed the MCP search, outfit suggestion, and fit card. |
+| 2 | Empty search stops before outfit tool | 5/5 | MET | All five impossible tries returned the actionable stop message, with no outfit call in the trace. |
+| 3 | Selected item ID equals outfit input ID | 5/5 | MET | All five tries recorded `lst_004` in both session fields and in the outfit call trace. |
+| 4 | Card has item/type, numeric price, platform, and 2–4 sentences | 4/5 | MET | All five cards named a silk slip dress, $30, and Depop; one had two sentences and four had three. |
+| 5 | All search results at or below parsed ceiling | 5/5 | MET | Every result in each of the five tries cost at most $50; the six prices were the same each time. |
 
 **Diagnoses**
 
+No criterion missed. These five scenarios are direct and the first result is stable, so the targets may be safe. I would tighten criterion 1 in the next unit to require five of five *different phrasings* of a matching request, instead of repeating one direct query.
+
+The baseline still exposes a retrieval-tool weakness outside the five pass/fail targets. Across the four matching scenarios, `search_listings` returned 21 listings; 14 matched only one distinct request word in their title, category, tags, or colors. For example, `denim jacket` returned denim shorts and a denim vest, and `90s track jacket` returned a leather bomber and slip dress because each shared just one word. The mechanism is the search tool's current rule that accepts any single matching word. This adds weak candidates to the session even though the top listing remains correct. I will tighten that one search rule and measure whether it removes the weak candidates without losing the selected listings.
 
 
 ---
@@ -208,21 +248,34 @@ that produced it:
 
 **Happy path**
 
-```
-
+```text
+$ .venv/bin/python app.py ask 'vintage graphic tee under $30' --trace
+[1] search_listings (via MCP)
+      in:  description='vintage graphic tee', size=None, max_price=30.0
+      out: 10 items: Graphic Tee — 2003 Tour Bootleg Style, Vintage Band Tee — Faded Grey, Vintage Graphic Hoodie — Faded Black … +7 more
+[2] suggest_outfit
+      in:  new_item=lst_006 Graphic Tee — 2003 Tour Bootleg Style; wardrobe_items=10
+      out: Pair your new graphic tee with the baggy straight-leg jeans, black combat boots, and black crossbody bag for a…
+[3] create_fit_card
+      in:  new_item=lst_006 Graphic Tee — 2003 Tour Bootleg Style; outfit=Pair your new graphic tee with the baggy straig…
+      out: Found this insane 2003 tour bootleg style graphic tee on Depop for just $24. It looks so good with baggy strai…
 ```
 
 **Empty search**
 
+```text
+$ .venv/bin/python app.py ask 'designer ballgown size XXS under $5' --trace
+[1] search_listings (via MCP)
+      in:  description='designer ballgown', size='XXS', max_price=5.0
+      out: [] (empty)
+[2] stop
+      out: No listings matched that request. Try a broader item description, another size, or a higher price limit.
+      →    search returned an empty list
 ```
 
-```
+**On the MCP move:** `mcp_server.py::search_listings` exposes the existing search with a description and typed inputs. `agent.py::run_agent` now calls it through `mcp_client.call_tool` and still receives `list[dict]` for matches or `[]` for no match. `python mcp_client.py` listed only `search_listings`; an end-to-end query selected the same `lst_006` listing as the direct call. The server startup adds overhead but did not change the search result shape.
 
-**On the MCP move:** <!-- what changed in your code, and whether anything
-behaved differently afterwards. If the rewire didn't work, say exactly where it
-broke — the error text and the last thing that worked. That earns the point in
-full. -->
-
+**Deliberate failures:** The impossible query stopped after the MCP search and suggested broadening the description, changing size, or raising the price ceiling. The empty wardrobe query, `90s track jacket in size M --empty-wardrobe`, returned general styling advice and a fit card. With `AI201_CACHE=0` and a temporary invalid `GEMINI_API_KEY` environment value, the agent stopped at `suggest_outfit` with: `The outfit model could not be reached. Check your API key or internet connection and try again.` The `.env` file was not edited.
 
 
 ---
