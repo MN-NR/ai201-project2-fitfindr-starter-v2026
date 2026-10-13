@@ -99,7 +99,9 @@ def search_listings(
         category = set(re.findall(r"[a-z0-9]+", listing["category"].lower()))
         colors = set(re.findall(r"[a-z0-9]+", " ".join(listing["colors"]).lower()))
         details = set(re.findall(r"[a-z0-9]+", listing["description"].lower()))
-        if not words & (title | tags | category | colors):
+        # Multiword requests need at least two distinct primary-field matches;
+        # a single common word such as "denim" should not admit unrelated items.
+        if len(words & (title | tags | category | colors)) < min(2, len(words)):
             continue
         score = (4 * len(words & title) + 3 * len(words & tags)
                  + 2 * len(words & category) + 2 * len(words & colors)
