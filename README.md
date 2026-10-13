@@ -16,8 +16,7 @@
 > The three tools are implemented. The last command searches listings, suggests
 > an outfit, and creates a fit card.
 >
-> **The Unit 3 sections below are the submission.** Unit 4 sections remain as
-> the starter template for the next assignment.
+> **The Unit 3 build and Unit 4 test sections below are the submission.**
 
 ---
 
@@ -129,23 +128,9 @@ I also checked the tool empty cases directly: `search_listings('designer ballgow
 
 **Unit 4:** I asked Codex to register the search tool through MCP and compare its returned value with the direct call; both returned a Python list of listing dictionaries, including `[]` for no match. I also asked it to trigger the three required failures and inspect the messages. It used an invalid key only for one process, saw the model error handled in the outfit stage, and added trace steps that show the MCP call and early stop.
 
-<!-- ═══════════════════════ UNIT 4 — THE TEST ═══════════════════════
-
-     Don't fill these in during unit 3.
-     ═══════════════════════════════════════════════════════════════════ -->
-
 ---
 
 ## Run Log — Before
-
-<!-- Five criteria, five tries each, in this exact format.
-
-     Five, because your criteria are written out of five. Mark each try PASS
-     or FAIL, count the passes, and read that count against your target — a
-     row targeting 4 of 5 with three PASS cells is MISSED (3/5).
-
-     `python run_eval.py --label before` runs everything and writes the table
-     into results/. Paste it here and fill in the verdicts. -->
 
 | Criterion | Target | Try 1 | Try 2 | Try 3 | Try 4 | Try 5 | Verdict |
 |---|---|---|---|---|---|---|---|
@@ -201,22 +186,6 @@ Still can't believe I scored this 90s silk slip dress on Depop for just $30! Thr
 
 ## Verdicts and Diagnoses
 
-<!-- MET or MISSED per criterion against LAST UNIT's target, plus a sentence on
-     how you decided.
-
-     Then, for every miss: which of the four places it happened — a tool, the
-     loop's branch, the session, or the model's output — AND the mechanism.
-
-     Not a diagnosis:  "The fit card was bad."
-     A diagnosis:      "The fit card criterion missed on 2 of 5 items. Both had
-                        an empty brand field. My prompt puts the brand in the
-                        first sentence, so the card opened with a blank and read
-                        like a fragment. The tool worked; the prompt assumed a
-                        field that isn't always there."
-
-     Look for a pattern. Three misses on the same tool is one problem, not
-     three. -->
-
 | # | Criterion | Target | Verdict | How I decided |
 |---|---|---|---|---|
 | 1 | Full three-tool run | 4/5 | MET | All five matching tries completed the MCP search, outfit suggestion, and fit card. |
@@ -231,20 +200,9 @@ No criterion missed. These five scenarios are direct and the first result is sta
 
 The baseline still exposes a retrieval-tool weakness outside the five pass/fail targets. Across the four matching scenarios, `search_listings` returned 21 listings; 14 matched only one distinct request word in their title, category, tags, or colors. For example, `denim jacket` returned denim shorts and a denim vest, and `90s track jacket` returned a leather bomber and slip dress because each shared just one word. The mechanism is the search tool's current rule that accepts any single matching word. This adds weak candidates to the session even though the top listing remains correct. I will tighten that one search rule and measure whether it removes the weak candidates without losing the selected listings.
 
-
 ---
 
 ## Loop Trace
-
-<!-- One full run, printed step by step, with the MCP call visible in it.
-
-     `python app.py ask '...' --trace` once you've added the trace.step()
-     calls in Milestone 2.
-
-     Worth pasting BOTH the happy path and the empty-search path. The empty
-     one should be visibly shorter, because it stops. If your two traces are
-     the same length, your branch isn't working — and this is the fastest way
-     anyone will ever find that out. -->
 
 **Happy path**
 
@@ -277,80 +235,88 @@ $ .venv/bin/python app.py ask 'designer ballgown size XXS under $5' --trace
 
 **Deliberate failures:** The impossible query stopped after the MCP search and suggested broadening the description, changing size, or raising the price ceiling. The empty wardrobe query, `90s track jacket in size M --empty-wardrobe`, returned general styling advice and a fit card. With `AI201_CACHE=0` and a temporary invalid `GEMINI_API_KEY` environment value, the agent stopped at `suggest_outfit` with: `The outfit model could not be reached. Check your API key or internet connection and try again.` The `.env` file was not edited.
 
+```text
+$ .venv/bin/python app.py ask '90s track jacket in size M' --empty-wardrobe
+  Outfit:   Here are two easy ways to style a 90s navy and white track jacket:
+
+*   **Retro Streetwear:** Layer it over a graphic tee or hoodie, paired with relaxed-fit light wash denim and chunky sneakers.
+*   **Athleisure Casual:** Keep it sporty by pairing it with matching navy sweatpants or joggers, a simple white crewneck tee, and minimalist trainers.
+```
+
+```text
+$ GEMINI_API_KEY=invalid-key AI201_CACHE=0 .venv/bin/python app.py ask 'corduroy wide-leg pants under $40' --trace
+[2] suggest_outfit
+      in:  new_item=lst_005 Corduroy Wide-Leg Pants — Rust; wardrobe_items=10
+      out: The outfit model could not be reached. Check your API key or internet connection and try again.
+```
 
 ---
 
 ## The Improvement
 
-<!-- What you changed, why your diagnosis pointed at it, and the after-run in
-     the same table format. One change, measured properly.
+**What I changed:** In `tools.py::search_listings`, a multiword description now requires at least two distinct matches across a listing's title, category, style tags, and colors. One-word descriptions still need one match. This was the only search-behavior change after the baseline; the corpus, model, query parsing, prompts, and five scenarios stayed the same.
 
-     `python run_eval.py --label after` -->
-
-**What I changed:**
-
-**Which failure it was meant to fix:**
+**Which failure it was meant to fix:** None of the five original criteria missed, but the retrieval-tool diagnosis above found 14 weak candidates among 21 returned listings across the four matching scenarios. A one-word match such as `denim` admitted shorts and vests for a jacket request. Requiring two matching words was meant to remove those weak candidates without losing the intended top listings.
 
 ### Run Log — After
 
 | Criterion | Target | Try 1 | Try 2 | Try 3 | Try 4 | Try 5 | Verdict |
 |---|---|---|---|---|---|---|---|
-| 1.  |  |  |  |  |  |  |  |
-| 2.  |  |  |  |  |  |  |  |
-| 3.  |  |  |  |  |  |  |  |
-| 4.  |  |  |  |  |  |  |  |
-| 5.  |  |  |  |  |  |  |  |
+| 1. Matching query completes all three tools | 4/5 | PASS | PASS | PASS | PASS | PASS | MET (5/5) |
+| 2. Empty search stops before tool 2 | 5/5 | PASS | PASS | PASS | PASS | PASS | MET (5/5) |
+| 3. Selected item reaches outfit tool unchanged | 5/5 | PASS | PASS | PASS | PASS | PASS | MET (5/5) |
+| 4. Fit card includes item, price, platform in 2–4 sentences | 4/5 | PASS | PASS | PASS | PASS | PASS | MET (5/5) |
+| 5. Every search result stays within price ceiling | 5/5 | PASS | PASS | PASS | PASS | PASS | MET (5/5) |
 
-**Did it help, and how do I know:**
+Raw evidence: [results/run_2026-10-13_1819_after.md](results/run_2026-10-13_1819_after.md), again produced by `run_eval.py::main` with caching off. Actual excerpts from try 1 of each scenario:
 
-<!-- If it made things worse, say that. Honestly reported, that earns full
-     credit and is more interesting than one that worked. -->
+**1. Full run:** `agent.py::run_agent` completed the three calls. `run_eval.py::write_report` recorded:
 
+```text
+- selected_item_id: lst_006
+Score this 2003 tour bootleg style graphic tee on Depop for just $24! I'm totally planning to wear it with baggy straight-leg jeans for that effortless grunge look. Such a sick thrift find.
+```
 
+**2. Empty search:** `agent.py::run_agent` stopped before the outfit tool:
+
+```text
+[1] search_listings (via MCP)
+      in:  description='designer ballgown', size='XXS', max_price=5.0
+      out: [] (empty)
+[2] stop
+      out: No listings matched that request. Try a broader item description, another size, or a higher price limit.
+      →    search returned an empty list
+```
+
+**3. State transfer:** `agent.py::run_agent` recorded the same ID selected and passed to `tools.py::suggest_outfit`:
+
+```text
+- selected_item_id: lst_004
+- outfit_tool_item_id: lst_004
+[2] suggest_outfit
+      in:  new_item=lst_004 90s Track Jacket — Navy/White Stripe; wardrobe_items=10
+```
+
+**4. Fit card facts:** `tools.py::create_fit_card` returned three sentences identifying the silk slip dress, $30, and Depop:
+
+```text
+Scored this gorgeous 90s floral silk slip dress on depop for just $30! I love how it looks layered under an oversized grey crewneck sweatshirt. Such an easy piece to dress up or down.
+```
+
+**5. Price ceiling:** `agent.py::_parse_query` still found $50 and `mcp_server.py::search_listings` returned only the $42 jacket:
+
+```text
+- parsed: {'description': 'denim jacket', 'size': None, 'max_price': 50.0}
+- search_result_prices: [42.0]
+```
+
+**Did it help, and how do I know:** Yes, for search focus on these four matching scenarios. The total results fell from 21 to 7, while the same four intended listings remained first. Before the change, 14 of 21 results matched only one distinct request word in the primary fields; after, none of the 7 did. The five acceptance-criterion scores did not change: every row stayed at 5/5. This result does not show that stricter matching helps with paraphrased requests, which these scenarios do not test.
 
 ---
 
 ## What's Still Broken
 
-<!-- For each criterion still missed: what you'd do, and why you stopped where
-     you did. "I ran out of time" is fine if it's true. Pretending nothing is
-     left is not. -->
-
-
-
-<!-- ═════════════════════════════════════════════════════════════════════
-
-     SUBMISSION CHECKLIST — unit 3
-
-       [ ] criteria.md has five numbered criteria, each with a target
-       [ ] Each criterion has a reason underneath it
-       [ ] All five unit 3 sections above have real content
-       [ ] Tool Inventory: all three tools, inputs WITH TYPES, a specific
-           return value, and the empty case
-       [ ] Planning Loop names the branch rule and agent.py::run_agent
-       [ ] Sample Run: one full query plus the three per-tool tests, as text
-       [ ] At least four new commits
-       [ ] Repository URL submitted — WRITE IT DOWN, you submit the same one
-           next unit
-
-     SUBMISSION CHECKLIST — unit 4
-
-       [ ] mcp_server.py exists with one tool registered
-           (or a written record of exactly where the rewire broke)
-       [ ] Run Log — Before, five criteria, five tries each
-       [ ] Real output pasted underneath, naming file and function
-       [ ] A verdict on every criterion
-       [ ] A diagnosis for every miss, naming a place AND a mechanism
-       [ ] Loop Trace, with the MCP call visible in it
-       [ ] All three failure modes triggered and handled
-       [ ] One improvement, with Run Log — After in the same format
-       [ ] What's Still Broken
-       [ ] At least four new commits
-       [ ] The SAME repository URL as last unit
-
-     Do not delete and recreate this repository. Your commit history is what
-     shows your criteria existed before your results did.
-     ═════════════════════════════════════════════════════════════════════ -->
+No acceptance criterion remained missed after the improvement. The stricter search may now reject a relevant listing when the user's words are synonyms for the listing text or only one requested word appears in its main fields. I would next add varied phrasings and inspect false negatives before deciding whether to add synonyms or a different ranking approach. I stopped after one search change so the before-and-after run isolates its effect, as this unit requires.
 
 ---
 
