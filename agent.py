@@ -17,7 +17,7 @@ import re
 
 import config
 import trace
-from mcp_client import call_tool
+from mcp_client import MCPError, call_tool
 from tools import suggest_outfit, create_fit_card
 from generate import ModelUnavailable
 
@@ -106,32 +106,79 @@ def run_agent(query: str, wardrobe: dict) -> dict:
         if stage == "search":
             session["parsed"] = _parse_query(session["query"])
             parsed = session["parsed"]
-            session["search_results"] = call_tool("search_listings", {
-                "description": parsed["description"],
-                "size": parsed["size"],
-                "max_price": parsed["max_price"],
-            })
+            try:
+                session["search_results"] = call_tool("search_listings", {
+                    "description": parsed["description"],
+                    "size": parsed["size"],
+                    "max_price": parsed["max_price"],
+                })
+            except MCPError:
+                session["error"] = (
+                    "Listing search is unavailable. Check that mcp_server.py "
+                    "starts, then try again."
+                )
+                trace.step("search_listings (via MCP)", inputs=str(parsed),
+                           returned=session["error"])
+                return session
+            trace.step(
+                "search_listings (via MCP)",
+                inputs=(f"description={parsed['description']!r}, "
+                        f"size={parsed['size']!r}, max_price={parsed['max_price']!r}"),
+                returned=session["search_results"],
+            )
             if not session["search_results"]:
                 session["error"] = (
                     "No listings matched that request. Try a broader item "
                     "description, another size, or a higher price limit."
                 )
+                trace.step("stop", returned=session["error"],
+                           note="search returned an empty list")
                 return session
             session["selected_item"] = session["search_results"][0]
             stage = "outfit"
         elif stage == "outfit":
             item = session["selected_item"]
             session["tool_inputs"]["suggest_outfit"] = {"new_item_id": item["id"]}
-            session["outfit_suggestion"] = suggest_outfit(
-                item, session["wardrobe"]
+            outfit_input = (
+                f"new_item={item['id']} {item['title']}; "
+                f"wardrobe_items={len(session['wardrobe'].get('items', []))}"
             )
+            try:
+                session["outfit_suggestion"] = suggest_outfit(
+                    item, session["wardrobe"]
+                )
+            except ModelUnavailable:
+                session["error"] = (
+                    "The outfit model could not be reached. Check your API key "
+                    "or internet connection and try again."
+                )
+                trace.step("suggest_outfit", inputs=outfit_input,
+                           returned=session["error"])
+                return session
+            trace.step("suggest_outfit", inputs=outfit_input,
+                       returned=session["outfit_suggestion"])
             stage = "card"
         elif stage == "card":
             item = session["selected_item"]
             session["tool_inputs"]["create_fit_card"] = {"new_item_id": item["id"]}
-            session["fit_card"] = create_fit_card(
-                session["outfit_suggestion"], item
+            card_input = (
+                f"new_item={item['id']} {item['title']}; "
+                f"outfit={session['outfit_suggestion']}"
             )
+            try:
+                session["fit_card"] = create_fit_card(
+                    session["outfit_suggestion"], item
+                )
+            except ModelUnavailable:
+                session["error"] = (
+                    "The fit-card model could not be reached. Check your API "
+                    "key or internet connection and try again."
+                )
+                trace.step("create_fit_card", inputs=card_input,
+                           returned=session["error"])
+                return session
+            trace.step("create_fit_card", inputs=card_input,
+                       returned=session["fit_card"])
             stage = "done"
     return session
 
